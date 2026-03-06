@@ -1,0 +1,1 @@
+I want to build a skill that can pass an input folder as an argument, an output folder as an argument, then this skill could batchly use build-manifest skill with all possible combination of under the input folder (multiple triple-tuple of test plan excel file, path to directory containing PDF report files, and a output subfolder under the output folder argument)
