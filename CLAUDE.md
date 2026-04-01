@@ -22,7 +22,10 @@ Research tool for extracting 电池 (battery), 电机 (motor), and 电控 (elect
 
 | Skill | Invocation | Purpose |
 |-------|-----------|---------|
-| `reason-excel-unified-schema` | `/reason-excel-unified-schema <excel_path> <output_dir>` | Read root Excel → `三电参数_unified_output.json` (canonical schema) |
+| `scan-excel-manifest` | `/scan-excel-manifest <vehicle_input_dir> <vehicle_output_dir>` | Scan `结构参数` folder → `excel_manifest.json` |
+| `reason-excel-unified-schema` | `/reason-excel-unified-schema <excel_path> <output_dir> [report_id]` | Read root Excel → `{report_id}_三电参数_unified_output.json` (canonical schema) |
+| `reason-excel-batch` | `/reason-excel-batch <excel_manifest.json>` | Batch-invoke `/reason-excel-unified-schema` for each Excel entry |
+| `chain-reason-excel` | `/chain-reason-excel <vehicle_input_dir> <vehicle_output_dir>` | Chain scan + batch reason for Excel files |
 | `build-manifest` | `/build-manifest <test_plan_xls> <report_dir> <output_dir>` | Read test plan, match to PDFs → `vision_manifest.json` |
 | `build-manifest-batch` | `/build-manifest-batch <vehicle_input_dir> <vehicle_output_dir>` | Batch-invoke `/build-manifest` for each subfolder |
 | `vision-extract` | `/vision-extract <vision_manifest.json>` | Invoke `vision_tool.py` — parallel Vision API → `_raw.txt` |
@@ -33,7 +36,7 @@ Research tool for extracting 电池 (battery), 电机 (motor), and 电控 (elect
 | `reason-text-unified-schema-api` | `/reason-text-unified-schema-api <reason_manifest.json>` | Read `_raw.txt` → `_unified_output.json` (Claude API mode, parallel) |
 | `reason-text-unified-schema-batch` | `/reason-text-unified-schema-batch <vehicle_output_dir> [api\|cc]` | Batch-invoke reasoning for each subfolder |
 | `merge-unified-table` | `/merge-unified-table <vehicle_output_dir>` | Merge all `_unified_output.json` → `merged_final_result.json` + `.xlsx` |
-| `chain-extract-batch` | `/chain-extract-batch <root_excel> <vehicle_input_dir> <vehicle_output_dir> [api\|cc]` | Chain all 6 steps for a vehicle |
+| `chain-extract-batch` | `/chain-extract-batch <vehicle_input_dir> <vehicle_output_dir> [api\|cc]` | Chain all 6 steps for a vehicle |
 
 #### History Pipeline (`/special-chain-history-extract`)
 
@@ -49,8 +52,8 @@ Research tool for extracting 电池 (battery), 电机 (motor), and 电控 (elect
 ### Current Application (`/chain-extract-batch`)
 
 ```
-Step 1 (parallel): /reason-excel-unified-schema <root_excel> <output_dir>
-  → 三电参数_unified_output.json (declared parameters from root Excel)
+Step 1 (parallel): /chain-reason-excel <vehicle_input_dir> <vehicle_output_dir>
+  → excel_manifest.json + {report_id}_三电参数_unified_output.json (auto-discover & extract declared parameters)
 
 Step 2 (parallel): /build-manifest-batch <vehicle_input_dir> <vehicle_output_dir>
   → vision_manifest.json per subfolder
@@ -81,8 +84,9 @@ Step 4: merge_unified_tool.py --sort-mode history → merged_final_result.json +
 
 ```
 output/<vehicle_id>/
+  excel_manifest.json                       # Discovered Excel files from 结构参数
+  {report_id}_三电参数_unified_output.json  # Declared params from root Excel(s)
   initial/
-    三电参数_unified_output.json   # Declared params from root Excel
     vision_manifest.json         # PDFs to process
     reason_manifest.json         # Raw text files to reason over
     {report_id}_raw.txt          # Vision API extracted text per PDF

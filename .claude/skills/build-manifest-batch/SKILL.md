@@ -27,7 +27,7 @@ Sort discovered folders by their numeric prefix (1-, 2-, 3-, ...).
 
 For each folder found in Step 1:
 
-**2a. Test plan Excel**: Search within the folder for `.xls`/`.xlsx` files in any subdirectory related to test plans (e.g., containing `方案` in the path or filename). If multiple, prefer filename containing `方案表`. Skip folder if none found.
+**2a. Test plan Excel**: Search within the folder for `.xls`/`.xlsx` files in any subdirectory related to test plans (e.g., containing `方案` in the path or filename). If multiple, prefer filename containing `方案表`. Normally the folder is called `2-实验方案`, Skip folder if none found.
 
 **2b. Report directory**: Search within the folder for a subdirectory containing PDF files (related to reports — e.g., `检测报告`, `试验报告`). If PDFs exist only in a child sub-subfolder (e.g., `3 试验报告/` or `3-检测报告/`), use that directory. Skip folder if no PDFs found anywhere.
 

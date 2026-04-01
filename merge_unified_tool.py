@@ -84,11 +84,11 @@ def main():
         sys.exit(1)
 
     # Separate declared (三电参数) from report files
-    declared_file = None
+    declared_files = []
     report_files = []
     for fp in all_files:
-        if fp.name == "三电参数_unified_output.json":
-            declared_file = fp
+        if fp.name.endswith("三电参数_unified_output.json"):
+            declared_files.append(fp)
         else:
             report_files.append(fp)
 
@@ -127,8 +127,8 @@ def main():
 
         records.sort(key=sort_key_date)
 
-    # Append declared file last (only in date mode; in history mode there's no declared file)
-    if declared_file:
+    # Append declared files last (only in date mode; in history mode there's no declared file)
+    for declared_file in declared_files:
         with open(declared_file, encoding="utf-8") as f:
             declared_data = json.load(f)
         declared_data["_source_file"] = str(declared_file.relative_to(vehicle_dir))
@@ -146,7 +146,7 @@ def main():
     write_excel(records, xlsx_path, schema_keys)
 
     n_reports = len(report_files)
-    n_declared = 1 if declared_file else 0
+    n_declared = len(declared_files)
     total = len(records)
     print(f"[Done] merged_final_result.json — {total} records ({n_reports} reports + {n_declared} declared)")
     print(f"[Done] merged_final_result.xlsx — 4 sheets ({', '.join(DOMAINS)})")

@@ -43,9 +43,19 @@ Match the collected report numbers from Step 2 to actual PDF filenames. Report I
 
 ### Step 5 — Fallback if no test items matched
 
+**IMPORTANT:** Only proceed to this fallback if no test plan Excel is available OR Step 4 produced no matching reports. Do not skip straight to fallback.
+
+#### Step 5.1
+
 If Step 2 found no relevant test items (or no report numbers could be extracted), fall back to **reading the first 3 pages of each PDF** to determine relevance. Do NOT rely on filename patterns — filenames are opaque report codes and cannot be used to infer content.
 
-For each PDF from Step 3, use Python with `pymupdf` (fitz) to extract the text of page 1. Then check whether the extracted text contains 电池/电机/电控 related keywords (e.g., 蓄电池, 动力电池, 驱动电机, 电机控制器, 充电, BMS, 电磁兼容, etc.). Select only those PDFs whose first-page text indicates 电池/电机/电控 content. DO NOT select all PDFs — be selective based on actual page content.
+For each PDF from Step 3, use Python with `pymupdf` (fitz) to extract text from the first 3 pages. Then check whether the extracted text contains 电池/电机/电控 related keywords (e.g., 蓄电池, 动力电池, 驱动电机, 电机控制器, 充电, BMS, 电磁兼容, etc.). Select only those PDFs whose text indicates 电池/电机/电控 content. DO NOT select all PDFs — be selective based on actual page content.
+
+#### Step 5.2 - only if Step 5.1 found <=3 relevant PDFs
+
+If Step 5.1 still found no relevant PDFs, check the 附录 (appendix) section of each PDF — appendices often contain information about tested 电池/电机/电控 components even when the main test is not focused on them. Include a PDF if its 附录 contains 电池/电机/电控 related keywords. For each type only Include one PDF to avoid overwhelming the vision extraction step with too many irrelevant files.
+
+Unless all PDFs are image-based, do not put all PDFs into manifest. Do a thorough check to find at least some relevant PDFs, otherwise the vision extraction step will be a waste of resources and may cause confusion for stakeholders.
 
 ### Step 6 — Write the manifest
 

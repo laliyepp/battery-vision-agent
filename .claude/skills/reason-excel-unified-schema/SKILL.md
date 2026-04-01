@@ -1,7 +1,7 @@
 ---
 name: reason-excel-unified-schema
-description: Read a root Excel parameter file and extract battery/motor/econtrol data directly into the unified schema format, outputting 三电参数_unified_output.json.
-argument-hint: <excel_path> <output_dir>
+description: Read a root Excel parameter file and extract battery/motor/econtrol data directly into the unified schema format, outputting {report_id}_三电参数_unified_output.json.
+argument-hint: <excel_path> <output_dir> [report_id]
 ---
 
 # Reason Excel — Unified Schema
@@ -12,36 +12,40 @@ Read a root-level Excel parameter file and extract all vehicle/battery/motor/eco
 
 - `$0` — Path to the Excel file (.xlsx or .xls)
 - `$1` — Path to the output directory
+- `$2` — Optional `report_id` prefix. If provided, output filename is `{report_id}_三电参数_unified_output.json`. If omitted, derive from the `$0` filename stem (e.g., `技术参数-xxx.xlsx` → `技术参数-xxx`).
 
 ## Output
 
-- `$1/三电参数_unified_output.json` — Same 4-domain structure as `_unified_output.json` files
+- `$1/{report_id}_三电参数_unified_output.json` — Same 4-domain structure as `_unified_output.json` files
+- The `report_id` is determined from `$2` if provided, otherwise from the `$0` filename stem.
 
 ## Process
 
-1. **Skip check**: If `$1/三电参数_unified_output.json` already exists, print `[Skip] 三电参数_unified_output.json already exists` and stop.
+1. **Determine output filename**: If `$2` is provided, use `{$2}_三电参数_unified_output.json`. Otherwise, derive from `$0` filename stem: e.g., `技术参数-xxx.xlsx` → `技术参数-xxx_三电参数_unified_output.json`.
 
-2. **Read the schema**: Read `schema/unified_schema_v2.json` from the project root. This defines all 4 domains (通用, 电池, 电机, 电控) with their fields, descriptions, and keywords.
+2. **Skip check**: If the output file already exists, print `[Skip] {filename} already exists` and stop.
 
-3. **Read the Excel file**: Use Bash with Python (openpyxl for .xlsx, xlrd for .xls) or Read tool to extract all content from the Excel file. Focus on the `参数信息` sheet (or equivalent parameter sheet).
+3. **Read the schema**: Read `schema/unified_schema_v2.json` from the project root. This defines all 4 domains (通用, 电池, 电机, 电控) with their fields, descriptions, and keywords.
 
-4. **Initialize** the output template — a JSON object with all 4 domains, each containing every schema key set to `""`.
+4. **Read the Excel file**: Use the `/xlsx` skill to read the Excel file. Specifically, use pandas `pd.read_excel()` (handles both `.xlsx` and `.xls` formats) or openpyxl for `.xlsx` files per the xlsx skill conventions. Focus on the `参数信息` sheet (or equivalent parameter sheet).
 
-5. **Auto-fill 通用 domain**:
+5. **Initialize** the output template — a JSON object with all 4 domains, each containing every schema key set to `""`.
+
+6. **Auto-fill 通用 domain**:
    - Fill `车辆名称` and `车辆型号` from the Excel data.
    - Fill `生产单位` from the Excel data if available.
    - Set `检测报告文件名` = `"declared"` (this is declared data from Excel, not a test report).
    - Leave report-specific fields as `""`: `受检单位`, `检验单位`, `检验类别`, `检验依据`, `送样日期`, `签发日期`, `检验日期`.
 
-6. **Extract 电池/电机/电控 data**: Reason through the Excel content to fill in values. For each schema field:
+7. **Extract 电池/电机/电控 data**: Reason through the Excel content to fill in values. For each schema field:
    - Use the `description` to understand what kind of information belongs there.
    - Use the `keywords` to locate matching parameters in the Excel data.
    - If the Excel contains a clear, explicit value for the field, fill it in as a string.
    - If no matching data is found, leave the value as `""`.
 
-7. **Write** the completed JSON to `$1/三电参数_unified_output.json`.
+8. **Write** the completed JSON to `$1/{report_id}_三电参数_unified_output.json`.
 
-8. **Print**: `[Done] 三电参数_unified_output.json`
+9. **Print**: `[Done] {report_id}_三电参数_unified_output.json`
 
 ## Output Format
 
@@ -101,4 +105,4 @@ Every output file has the **exact same structure** — all 4 domains, all keys p
 ### Data Quality
 - **Do not guess or infer** values. Only fill in data that is explicitly stated in the Excel.
 - **Preserve units** as they appear. If the schema column already includes a unit suffix (e.g., `_kW`, `_V`), write only the numeric value as a string.
-- **Skip** if `三电参数_unified_output.json` already exists (do not re-process).
+- **Skip** if the output file already exists (do not re-process).

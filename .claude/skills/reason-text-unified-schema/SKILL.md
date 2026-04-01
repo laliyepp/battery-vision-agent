@@ -28,29 +28,62 @@ Read a `reason_manifest.json` file and process every `_raw.txt` listed in it. Fo
 
 1. **Read the schema**: Read `schema/unified_schema_v2.json` from the project root. This defines all 4 domains (通用, 电池, 电机, 电控) with their fields, descriptions, and keywords.
 
-2. **Read the manifest**: Parse the JSON array from `$ARGUMENTS`.
+2. **Read the manifest**: Parse the JSON array from `$ARGUMENTS`. Filter out entries where `{output_dir}/{report_id}_unified_output.json` already exists.
 
-3. **For each entry** in the manifest:
+3. **Choose processing strategy** based on the number of remaining (non-skipped) entries:
+   - **≤5 entries** → process sequentially in the main conversation (Step 4)
+   - **>5 entries** → dispatch parallel background agents (Step 5)
 
-   a. **Skip check**: If `{output_dir}/{report_id}_unified_output.json` already exists, skip this entry.
+4. **Sequential processing** — for each entry:
 
-   b. **Read** the `_raw.txt` file.
+   a. **Read** the full `_raw.txt` file. You MUST read the entire file — do not stop early or skip sections.
 
-   c. **Initialize** the output template — a JSON object with all 4 domains, each containing every schema key set to `""`.
+   b. **Initialize** the output template — a JSON object with all 4 domains, each containing every schema key set to `""`. Set `通用.检测报告文件名` = `report_id`.
 
-   d. **Auto-fill**: Set `通用.检测报告文件名` = `report_id`.
+   c. **Phase 1 — Full Document Survey** (read before extracting):
+      Scan the ENTIRE raw text from first page to last. Identify:
+      - The report type (motor test, battery test, EMC, EV safety, charging, instrumentation, etc.)
+      - Where the **附录** / **样品情况表** / **样品描述** sections are (usually the LAST 1–3 pages)
+      - Where test result tables and conclusion statements are
 
-   e. **Extract**: Reason through the raw text to fill in values. For each schema field:
-      - Use the `description` to understand what kind of information belongs there.
-      - Use the `keywords` to locate matching fields/labels in the raw text.
-      - If the raw text contains a clear, explicit value for the field, fill it in as a string.
-      - If no matching data is found, leave the value as `""`.
+      > **CRITICAL**: The 附录 (appendix) and 样品情况表 (sample details) sections near the END of the document are the PRIMARY source for 电池/电机/电控 component specifications. These sections contain structured tables with battery cell/pack specs, motor specs, controller specs, BMS info, and more. You MUST NOT skip or skim these sections. They are more important than the test result pages for data extraction.
 
-   f. **Write** the completed JSON to `{output_dir}/{report_id}_unified_output.json`.
+   d. **Phase 2 — Extract 通用 (General) fields**:
+      From the cover page (page 1), conclusion page, and header tables, extract:
+      `车辆名称`, `车辆型号`, `受检单位`, `生产单位`, `检验单位`, `检验类别`, `检验依据`, `送样日期`, `签发日期`, `检验日期`
 
-   g. **Print**: `[N/total] Unified: {report_id}_unified_output.json`
+   e. **Phase 3 — Extract 电池/电机/电控 fields from 附录 and body**:
+      This is the most important phase. Thoroughly scan the 附录/样品情况表 sections AND any specification tables in the report body.
 
-4. **Print**: `[Done] N files processed`
+      For EVERY schema field in 电池, 电机, and 电控 domains:
+      1. Check the field's `description` and `keywords` list from the schema
+      2. Search the raw text (especially 附录 and 样品情况表) for any matching label or semantically equivalent content
+      3. If found, extract the value as a string
+      4. When a single cell contains combined values (e.g., `电压/容量 | 321.2/153`), split them into the corresponding separate schema fields
+
+      Do this for ALL fields — do not stop after finding a few matches.
+
+   f. **Phase 4 — Extract test conclusions**:
+      From test result tables and conclusion statements, extract the relevant `_结论` and `检验结论` fields for each domain.
+
+   g. **Write** the completed JSON to `{output_dir}/{report_id}_unified_output.json`.
+
+   h. **Print**: `[N/total] Unified: {report_id}_unified_output.json`
+
+5. **Parallel batch processing** (when >5 entries remain):
+
+   a. Split the remaining entries into **batches of 5**.
+   b. For each batch, launch a **background Agent** with the following prompt:
+      - Instruct it to read `schema/unified_schema_v2.json`
+      - Give it the list of entries (raw_txt_path, output_dir, report_id) for its batch
+      - Instruct it to process each file using the same Phase 1–4 logic described in Step 4
+      - Instruct it to write each `_unified_output.json` file
+   c. Wait for all background agents to complete.
+   d. Verify each expected output file was created.
+
+6. **Print**: `[Done] N files processed`
+
+---
 
 ## Output Format
 
@@ -72,17 +105,26 @@ Every output file has the **exact same structure** — all 4 domains, all keys p
     "检验日期": "2020-09-28 至 2020-12-18"
   },
   "电池": {
-    "单体.型号": "",
-    "单体.生产企业": "",
+    "单体.型号": "LP2714897-51Ah",
+    "单体.生产企业": "力神动力电池系统有限公司",
+    "单体.种类": "三元材料",
+    "单体.额定电压_V": "3.65",
+    "单体.额定容量_Ah": "51",
     ...all battery keys present, "" if not found...
   },
   "电机": {
-    "电机.型号": "3D6",
-    "峰值功率_kW": "220",
+    "电机.型号": "TZ242XS005",
+    "电机.生产企业": "北京博格华纳汽车传动器有限公司",
+    "电机.型式": "永磁同步驱动电机",
+    "持续功率_kW": "60",
+    "峰值功率_kW": "120",
     ...
   },
   "电控": {
-    "电机控制器.型号": "3D6",
+    "电机控制器.型号": "KTZ32X42SUAES",
+    "电机控制器.生产企业": "联合汽车电子有限公司",
+    "电机控制器.冷却方式": "液冷",
+    "电机控制器.输入电压_V": "321.2",
     ...
   }
 }
@@ -98,8 +140,9 @@ Every output file has the **exact same structure** — all 4 domains, all keys p
 
 ### Multi-Value Handling
 - When a single report covers multiple components of the same type (e.g., front and rear motors, or multiple charging sockets), use `||` to separate values.
-- **Keep the order synced** across all related columns. For dual motors: always put the front motor first, rear motor second. If front/rear is not labeled, use document order.
-- Example: `"电机.型号": "3D3||3D6"`, `"峰值功率_kW": "137||220"`, `"电机.生产企业": "特斯拉（上海）有限公司||特斯拉（上海）有限公司"`.
+- **Keep the order synced** across all related columns. For dual motors: always put the front motor first, rear motor second.
+- **Strip positional prefixes**: When raw text says `前：3D3/后：3D6` or `前电机：3D3、后电机：3D6`, extract as `3D3||3D6`. Do NOT include `前：`, `后：`, `前电机`, `后电机` in the extracted values.
+- Example: `"电机.型号": "3D3||3D6"`, `"峰值功率_kW": "137||220"`.
 - If only one component exists, do NOT use `||` — just write the single value.
 
 ### Domain Classification
@@ -111,4 +154,5 @@ Every output file has the **exact same structure** — all 4 domains, all keys p
 - **Do not guess or infer** values. Only fill in data that is explicitly stated in the raw text.
 - **Normalize dates** to YYYY-MM-DD format. For date ranges, use `"YYYY-MM-DD 至 YYYY-MM-DD"`.
 - **Preserve units** as they appear. If the schema column already includes a unit suffix (e.g., `_kW`, `_V`), write only the numeric value as a string.
+- **Convert Wh to kWh** for `电池包.额定能量_kWh`: if the raw text gives energy in Wh (e.g., 49143.6 Wh), divide by 1000 and write `"49.1436"`.
 - **Skip** entries where `_unified_output.json` already exists (do not re-process).
